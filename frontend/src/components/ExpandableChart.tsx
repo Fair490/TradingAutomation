@@ -13,19 +13,20 @@ export function ExpandableChart({ title, children, expandedContent }: Expandable
 
   return (
     <>
-      <div className="relative group">
+      <div 
+        className="relative group cursor-pointer"
+        onClick={() => setIsExpanded(true)}
+      >
         {children}
-        <button
-          onClick={() => setIsExpanded(true)}
-          className="absolute top-2 right-2 rounded-lg bg-surface/80 p-2 text-muted opacity-0 transition-all hover:bg-surface hover:text-ink group-hover:opacity-100"
-          aria-label="Expand chart"
-        >
+        <div className="absolute top-2 right-2 rounded-lg bg-surface/80 p-2 text-muted opacity-0 transition-all group-hover:opacity-100 pointer-events-none">
           <Maximize2 size={16} />
-        </button>
+        </div>
       </div>
       
       <ChartModal isOpen={isExpanded} onClose={() => setIsExpanded(false)} title={title}>
-        {expandedContent || children}
+        <div onClick={(e) => e.stopPropagation()}>
+          {expandedContent || children}
+        </div>
       </ChartModal>
     </>
   );
