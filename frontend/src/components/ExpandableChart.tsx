@@ -14,7 +14,7 @@ export function ExpandableChart({ title, children, expandedContent }: Expandable
   return (
     <>
       <div 
-        className="relative group cursor-pointer"
+        className="relative group cursor-pointer h-full w-full"
         onClick={() => setIsExpanded(true)}
       >
         {children}
