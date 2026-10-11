@@ -8,6 +8,7 @@ import { TopBar } from "./components/TopBar";
 import { Nav, type PageKey } from "./components/Nav";
 import { MarketHealthPage } from "./components/MarketHealthPage";
 import { SectorPerformancePage } from "./components/SectorPerformancePage";
+import { DebugTerminalPage } from "./components/DebugTerminalPage";
 import { ComingSoonPage } from "./components/ComingSoonPage";
 
 type Theme = "light" | "dark";
@@ -82,6 +83,8 @@ export default function App() {
           rsOn={rsOn}
           rsBenchmark={rsBenchmark}
         />
+      ) : page === "terminal" ? (
+        <DebugTerminalPage />
       ) : (
         <ComingSoonPage page={page} />
       )}

@@ -15,7 +15,7 @@ const PAGES: { key: PageKey; label: string; comingSoon?: boolean }[] = [
   { key: "sector", label: "Sector Performance" },
   { key: "scanner", label: "Scanner", comingSoon: true },
   { key: "portfolio", label: "Portfolio", comingSoon: true },
-  { key: "terminal", label: "Terminal", comingSoon: true },
+  { key: "terminal", label: "Debug Terminal" },
   { key: "trade", label: "Trade Leader", comingSoon: true },
 ];
 
