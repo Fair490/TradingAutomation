@@ -28,6 +28,7 @@ from backend.api.responses import SafeJSONResponse
 from backend.api.routes import router
 from backend.debug.logger import setup_debug_logging
 from backend.debug.routes import router as debug_router
+from backend.scanner.routes import router as scanner_router
 from backend.loaders import store
 
 # Set up debug logging (includes console and debug terminal)
@@ -90,6 +91,7 @@ app.add_middleware(
 
 app.include_router(router)
 app.include_router(debug_router)
+app.include_router(scanner_router)
 
 
 # Middleware to log API requests

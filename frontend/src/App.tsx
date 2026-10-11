@@ -8,6 +8,7 @@ import { TopBar } from "./components/TopBar";
 import { Nav, type PageKey } from "./components/Nav";
 import { MarketHealthPage } from "./components/MarketHealthPage";
 import { SectorPerformancePage } from "./components/SectorPerformancePage";
+import { ScannerPage } from "./components/ScannerPage";
 import { DebugTerminalPage } from "./components/DebugTerminalPage";
 import { ComingSoonPage } from "./components/ComingSoonPage";
 
@@ -83,6 +84,8 @@ export default function App() {
           rsOn={rsOn}
           rsBenchmark={rsBenchmark}
         />
+      ) : page === "scanner" ? (
+        <ScannerPage />
       ) : page === "terminal" ? (
         <DebugTerminalPage />
       ) : (

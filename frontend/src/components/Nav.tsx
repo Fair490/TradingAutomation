@@ -13,7 +13,7 @@ export type PageKey =
 const PAGES: { key: PageKey; label: string; comingSoon?: boolean }[] = [
   { key: "market", label: "Market Health" },
   { key: "sector", label: "Sector Performance" },
-  { key: "scanner", label: "Scanner", comingSoon: true },
+  { key: "scanner", label: "Scanner" },
   { key: "portfolio", label: "Portfolio", comingSoon: true },
   { key: "terminal", label: "Debug Terminal" },
   { key: "trade", label: "Trade Leader", comingSoon: true },

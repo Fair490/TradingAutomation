@@ -183,3 +183,34 @@ def price_stats_vs_ma(con, ticker: str) -> dict:
         "pct_from_50dma": (last / ma50 - 1.0) * 100.0 if ma50 else None,
         "pct_from_150dma": (last / ma150 - 1.0) * 100.0 if ma150 else None,
     }
+
+
+def compute_sma(values: list[float | None] | pd.Series, window: int) -> list[float | None]:
+    """
+    Compute Simple Moving Average.
+    
+    Args:
+        values: List or Series of numeric values
+        window: Window size for SMA
+    
+    Returns:
+        List of SMA values (None for insufficient data)
+    """
+    import numpy as np
+    
+    if isinstance(values, pd.Series):
+        values = values.tolist()
+    
+    result = []
+    for i in range(len(values)):
+        if i < window - 1:
+            result.append(None)
+        else:
+            window_values = values[i - window + 1:i + 1]
+            valid_values = [v for v in window_values if v is not None and not np.isnan(v)]
+            if len(valid_values) == window:
+                result.append(sum(valid_values) / window)
+            else:
+                result.append(None)
+    
+    return result
