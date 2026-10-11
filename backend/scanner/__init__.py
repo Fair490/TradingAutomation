@@ -73,12 +73,11 @@ def scan_stocks(
             
             # Calculate indicators
             close = stock_df["close"].values
-            high = stock_df["high"].values
             dates = stock_df["date"].values
             
-            # 1. Close vs 252-day high
-            highest_high_252 = pd.Series(high).rolling(window=lookback_days, min_periods=1).max().values
-            close_vs_high = close[-1] / highest_high_252[-1] if highest_high_252[-1] > 0 else 0
+            # 1. Close vs 252-day high (using close as proxy since high not in DB)
+            highest_close_252 = pd.Series(close).rolling(window=lookback_days, min_periods=1).max().values
+            close_vs_high = close[-1] / highest_close_252[-1] if highest_close_252[-1] > 0 else 0
             passes_close_vs_high = close_vs_high >= min_close_vs_high
             
             # 2. Close >= 50-day SMA
