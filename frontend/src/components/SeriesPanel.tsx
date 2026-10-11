@@ -325,6 +325,22 @@ function rangeLabel(range: RangeKey): string {
 
 /** Aggregate daily bars to weekly (last bar per ISO week) or monthly. */
 
+/** Calculate daily percentage change from the last two data points */
+function calculateDailyChange(points: { date: string; value: number | null }[]): number | null {
+  if (points.length < 2) return null;
+  
+  // Get the last two non-null values
+  const nonNullPoints = points.filter(p => p.value !== null);
+  if (nonNullPoints.length < 2) return null;
+  
+  const current = nonNullPoints[nonNullPoints.length - 1].value!;
+  const previous = nonNullPoints[nonNullPoints.length - 2].value!;
+  
+  if (previous === 0) return null;
+  
+  return ((current - previous) / previous) * 100;
+}
+
 /**
  * Individual series chart card - extracted to fix React hooks violation.
  * This component handles a single series chart with proper hook usage.
@@ -351,6 +367,7 @@ function SeriesChartCard({
   c: ReturnType<typeof useThemeColors>;
 }) {
   const unitLabel = unitHint(series.unit);
+  const dailyChange = calculateDailyChange(series.points);
   
   // Build chart data with MAs merged in - this hook is now at the top level
   const chartData = useMemo(() => {
@@ -382,8 +399,8 @@ function SeriesChartCard({
         <p className="truncate text-[12.5px] font-semibold text-ink">
           {series.name}
         </p>
-        <span className={`text-[11.5px] font-medium ${toneClass(series.change_pct)}`}>
-          {signed(series.change_pct, 1, "%")}
+        <span className={`text-[11.5px] font-medium ${toneClass(dailyChange)}`}>
+          {signed(dailyChange, 2, "%")}
         </span>
       </div>
       <p className="mb-1 flex items-baseline gap-1 font-mono text-[17px] font-semibold tracking-[-0.02em] text-ink">
