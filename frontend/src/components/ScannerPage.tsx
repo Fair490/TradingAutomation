@@ -290,8 +290,19 @@ export function ScannerPage() {
           </div>
 
           {results.results.length === 0 ? (
-            <div className="py-12 text-center text-muted">
-              No stocks matched the criteria. Try adjusting the parameters.
+            <div className="rounded-lg border border-dashed border-line bg-surface-2/50 py-16 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-2">
+                <svg className="h-8 w-8 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <h3 className="mb-2 text-lg font-semibold text-ink">No Stocks Found</h3>
+              <p className="mb-4 text-sm text-muted">
+                No stocks matched the selected criteria.
+              </p>
+              <p className="text-xs text-muted">
+                Try adjusting the parameters or unchecking some criteria to broaden your search.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
