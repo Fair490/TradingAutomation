@@ -28,6 +28,7 @@ import {
   Switch,
 } from "./ui";
 import { ChartTooltip, useThemeColors, withAlpha } from "./charts";
+import { ExpandableChart } from "./ExpandableChart";
 
 type Mode = "pct" | "ratio";
 
@@ -169,6 +170,7 @@ export function BreadthPanel({
           </div>
 
           <div>
+            <ExpandableChart title="Market Breadth - % Stocks Above 200-Day Average">
             <ResponsiveContainer width="100%" height={330}>
               <ComposedChart
                 data={rows}
@@ -291,6 +293,7 @@ export function BreadthPanel({
                 />
               </ComposedChart>
             </ResponsiveContainer>
+            </ExpandableChart>
           </div>
         </div>
       ) : null}

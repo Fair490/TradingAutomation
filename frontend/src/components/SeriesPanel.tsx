@@ -52,6 +52,7 @@ import {
   Switch,
 } from "./ui";
 import { ChartTooltip, useThemeColors, withAlpha } from "./charts";
+import { ExpandableChart } from "./ExpandableChart";
 
 
 export function SeriesPanel({
@@ -165,6 +166,7 @@ export function SeriesPanel({
         ) : null}
 
         {data && combined.length > 0 && normalised ? (
+          <ExpandableChart title="Normalised Comparison (Rebased to 100)">
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={combined} margin={{ top: 10, right: 14, bottom: 0, left: -4 }}>
               <CartesianGrid stroke={c.line} vertical={false} />
@@ -215,6 +217,7 @@ export function SeriesPanel({
               ))}
             </LineChart>
           </ResponsiveContainer>
+          </ExpandableChart>
         ) : null}
 
         {data && !normalised ? (
@@ -412,6 +415,7 @@ function SeriesChartCard({
         ) : null}
       </p>
       {chartData.length ? (
+        <ExpandableChart title={series.name}>
         <ResponsiveContainer width="100%" height={168}>
           <AreaChart
             data={chartData}
@@ -490,6 +494,7 @@ function SeriesChartCard({
             ) : null}
           </AreaChart>
         </ResponsiveContainer>
+        </ExpandableChart>
       ) : (
         <div className="flex h-[168px] items-center justify-center rounded-lg border border-dashed border-line text-center text-[11.5px] text-muted">
           No data returned for {series.ticker}

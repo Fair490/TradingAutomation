@@ -26,6 +26,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ExpandableChart } from "./ExpandableChart";
 
 const GLOBAL_PALETTE = [
   "#2f6fdb",
@@ -209,6 +210,7 @@ export function GlobalPanel({
           </div>
 
           <div className="h-[340px] w-full">
+            <ExpandableChart title="Global Indices Comparison">
             <ResponsiveContainer>
               <GlobalCombinedChart
                 series={chartData.series}
@@ -218,6 +220,7 @@ export function GlobalPanel({
                 c={c}
               />
             </ResponsiveContainer>
+            </ExpandableChart>
           </div>
         </Card>
       ) : null}

@@ -26,6 +26,7 @@ import {
   Switch,
 } from "./ui";
 import { ChartTooltip, useThemeColors, withAlpha } from "./charts";
+import { ExpandableChart } from "./ExpandableChart";
 
 type View = "ratio" | "line";
 
@@ -179,6 +180,7 @@ export function AdvanceDeclinePanel({
             </div>
           ) : null}
 
+          <ExpandableChart title="Advance / Decline Ratio">
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart
               data={rows}
@@ -273,6 +275,7 @@ export function AdvanceDeclinePanel({
               />
             </ComposedChart>
           </ResponsiveContainer>
+          </ExpandableChart>
         </>
       ) : null}
 

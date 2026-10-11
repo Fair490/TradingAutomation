@@ -47,6 +47,7 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
+import { ExpandableChart } from "./ExpandableChart";
 
 const RANK_OPTIONS: { key: string; label: string }[] = [
   { key: "1M", label: "1M" },
@@ -432,6 +433,7 @@ function CompareChart({
       </div>
 
       <div className="h-[340px] w-full">
+        <ExpandableChart title="ETF Comparison">
         <ResponsiveContainer>
           <LineChart data={merged}>
             <CartesianGrid stroke={c.line} strokeDasharray="3 3" vertical={false} />
@@ -478,6 +480,7 @@ function CompareChart({
             ) : null}
           </LineChart>
         </ResponsiveContainer>
+        </ExpandableChart>
       </div>
     </Card>
   );
@@ -697,6 +700,7 @@ function ExpandedCard({
           </div>
         ) : null}
         <div className="h-[320px] w-full px-2 pb-4 pt-1">
+          <ExpandableChart title="ETF Relative Performance">
           <ResponsiveContainer>
             <ComposedChart data={merged}>
               <CartesianGrid stroke={c.line} strokeDasharray="3 3" vertical={false} />
@@ -761,6 +765,7 @@ function ExpandedCard({
               ) : null}
             </ComposedChart>
           </ResponsiveContainer>
+          </ExpandableChart>
         </div>
       </div>
     </div>
