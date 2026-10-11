@@ -43,7 +43,7 @@ def scan_stocks(
     """
     # Load universe
     universe = load_universe()
-    if universe.empty:
+    if not universe:  # Empty list
         return pd.DataFrame()
     
     # Load benchmark data
@@ -59,10 +59,10 @@ def scan_stocks(
     results = []
     
     with session() as con:
-        for _, stock in universe.iterrows():
-            ticker = stock.get("ticker") or f"{stock['Symbol']}.NS"
-            symbol = stock.get("Symbol", ticker.split(".")[0])
-            name = stock.get("Name", symbol)
+        for stock in universe:
+            ticker = stock.ticker
+            symbol = stock.symbol
+            name = stock.name
             
             # Load stock data
             stock_df = load_series(con, ticker)
