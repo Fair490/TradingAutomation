@@ -1,0 +1,34 @@
+{
+  "name": "market-health-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "smoke": "vite build && node scripts/smoke.mjs",
+    "smoke:hostile": "vite build && node scripts/smoke-hostile.mjs",
+    "stub-api": "node scripts/stub-api.mjs"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.15.0",
+    "swr": "^2.2.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^30.1.2",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.6.3",
+    "undici": "^8.11.2",
+    "vite": "^6.0.5"
+  }
+}
