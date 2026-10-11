@@ -1,0 +1,12 @@
+# Market Health Dashboard - backend (FastAPI + DuckDB + yfinance)
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.8
+yfinance>=0.2.40
+duckdb>=1.0
+pandas>=2.2
+numpy>=1.26
+
+# Tests
+pytest>=8.0
+httpx>=0.27          # required by fastapi.testclient

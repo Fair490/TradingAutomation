@@ -10,14 +10,15 @@ import useSWR from "swr";
 import { Clock } from "lucide-react";
 import type { GlobalCard, SeriesResponse } from "../lib/api";
 import { fetcher } from "../lib/api";
-import { axisDate, computeMA, mediumDate, num, signed, thin } from "../lib/format";
+import { aggregate, computeMA, mediumDate, num, signed, type Interval } from "../lib/format";
 import type { RangeKey } from "../lib/api";
 import { useRsBenchmark } from "../lib/useRsBenchmark";
 import { computeRS } from "../lib/rs";
 import { Card, ErrorNote, SectionTitle, Skeleton } from "./ui";
-import { ChartTooltip, Sparkline, useThemeColors } from "./charts";
+import { ChartTooltip, Sparkline, useThemeColors, withAlpha } from "./charts";
 import {
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -25,7 +26,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ChartModal } from "./ChartModal";
+import { ExpandableChart } from "./ExpandableChart";
+
+const GLOBAL_PALETTE = [
+  "#2f6fdb",
+  "#1a9b6c",
+  "#e07b39",
+  "#9b5de5",
+  "#c9a227",
+  "#d8453c",
+];
 
 export function GlobalPanel({
   theme,
@@ -41,12 +51,19 @@ export function GlobalPanel({
   const { data, error, isLoading } = useSWR<GlobalCard[]>("/api/global", fetcher, {
     keepPreviousData: true,
   });
+  const { data: chartData } = useSWR<SeriesResponse>(
+    `/api/global-chart?range=${range}`,
+    fetcher,
+    { keepPreviousData: true },
+  );
   const c = useThemeColors(theme);
   const { data: rsBenchData } = useRsBenchmark(
     rsOn && rsBenchmark ? rsBenchmark : "",
     range,
   );
-  const [expandedCard, setExpandedCard] = useState<GlobalCard | null>(null);
+  const [tf, setTf] = useState<Interval>("D");
+  const [showMA50, setShowMA50] = useState(false);
+  const [showMA150, setShowMA150] = useState(false);
 
   return (
     <div>
@@ -76,8 +93,8 @@ export function GlobalPanel({
           const sparkColour = trendColour(card, c);
           const unitLabel = unitHint(card.unit);
           return (
-            <div key={card.ticker} onClick={() => setExpandedCard(card)} className="cursor-pointer">
             <Card
+              key={card.ticker}
               className="group animate-rise transition-shadow hover:shadow-[0_6px_18px_rgba(15,23,32,0.08)]"
             >
               <div className="flex items-start justify-between gap-2">
@@ -141,24 +158,206 @@ export function GlobalPanel({
                 />
               ) : null}
             </Card>
-            </div>
           );
         })}
       </div>
 
-      {/* Expanded chart modal */}
-      {expandedCard ? (
-        <ExpandedGlobalCardModal
-          card={expandedCard}
-          range={range}
-          onClose={() => setExpandedCard(null)}
-          c={c}
-        />
+      {/* Combined price chart for all global markets */}
+      {chartData && chartData.series.length ? (
+        <Card className="mt-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[13px] font-semibold text-ink">
+                Global indices ({range})
+              </p>
+              <p className="text-[11.5px] text-muted">
+                Each market rebased to 100, aggregated {tf === "D" ? "daily" : tf === "W" ? "weekly" : "monthly"}.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-0.5 rounded-xl border border-line/80 bg-surface p-0.5 text-[11px]">
+                {(["D", "W", "M"] as Interval[]).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setTf(v)}
+                    className={`rounded-[10px] px-1.5 py-0.5 font-medium transition ${
+                      tf === v ? "bg-accent/15 text-accent" : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowMA50((v) => !v)}
+                className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium transition ${
+                  showMA50 ? "bg-ink/10 text-ink" : "text-muted hover:text-ink"
+                }`}
+                title="50-period moving average"
+              >
+                50 MA
+              </button>
+              <button
+                onClick={() => setShowMA150((v) => !v)}
+                className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium transition ${
+                  showMA150 ? "bg-ink/10 text-ink" : "text-muted hover:text-ink"
+                }`}
+                title="150-period moving average"
+              >
+                150 MA
+              </button>
+            </div>
+          </div>
+
+          <div className="h-[340px] w-full">
+            <ExpandableChart title="Global Indices Comparison">
+            <ResponsiveContainer>
+              <GlobalCombinedChart
+                series={chartData.series}
+                interval={tf}
+                showMA50={showMA50}
+                showMA150={showMA150}
+                c={c}
+              />
+            </ResponsiveContainer>
+            </ExpandableChart>
+          </div>
+        </Card>
       ) : null}
     </div>
   );
 }
 
+function GlobalCombinedChart({
+  series,
+  interval,
+  showMA50,
+  showMA150,
+  c,
+}: {
+  series: SeriesResponse["series"];
+  interval: Interval;
+  showMA50: boolean;
+  showMA150: boolean;
+  c: ReturnType<typeof useThemeColors>;
+}) {
+  const { rows } = useMemo(() => {
+    // Build daily data with rebased prices and MAs
+    const byDate = new Map<string, any>();
+    
+    for (const s of series) {
+      const dailyPoints = s.points.filter((p): p is { date: string; value: number } => p.value != null);
+      
+      // Rebase on daily data first
+      const first = dailyPoints.find((p) => p.value > 0)?.value ?? 1;
+      
+      // Compute MAs on daily rebased data
+      const dailyRebased = dailyPoints.map((p) => ({
+        date: p.date,
+        value: (p.value / first) * 100,
+      }));
+      
+      const ma50Daily = showMA50 ? computeMA(dailyRebased, "value", 50) : null;
+      const ma150Daily = showMA150 ? computeMA(dailyRebased, "value", 150) : null;
+      
+      // Build daily rows with price and MAs
+      for (let i = 0; i < dailyRebased.length; i++) {
+        const p = dailyRebased[i];
+        const row = byDate.get(p.date) ?? { date: p.date };
+        row[s.name] = p.value;
+        if (ma50Daily && ma50Daily[i] != null) {
+          row[`${s.name} · 50`] = ma50Daily[i];
+        }
+        if (ma150Daily && ma150Daily[i] != null) {
+          row[`${s.name} · 150`] = ma150Daily[i];
+        }
+        byDate.set(p.date, row);
+      }
+    }
+    
+    // Sort and aggregate to the selected interval
+    const dailyRows = [...byDate.values()].sort((a, b) =>
+      String(a.date).localeCompare(String(b.date)),
+    );
+    
+    // Aggregate by taking the last value in each period
+    const rows = aggregate(dailyRows as any, interval);
+    
+    return { rows };
+  }, [series, interval, showMA50, showMA150]);
+
+  // Filter out MA keys that have no data
+  const maKeys = useMemo(() => {
+    if (!rows.length) return [];
+    const keys = new Set<string>();
+    for (const row of rows) {
+      for (const key of Object.keys(row)) {
+        if (key.includes("· 50") || key.includes("· 150")) {
+          if ((row as any)[key] != null) keys.add(key);
+        }
+      }
+    }
+    return [...keys];
+  }, [rows]);
+
+  return (
+    <LineChart data={rows}>
+      <CartesianGrid stroke={c.line} strokeDasharray="3 3" vertical={false} />
+      <XAxis
+        dataKey="date"
+        stroke={c.faint}
+        tick={{ fontSize: 11 }}
+        minTickGap={40}
+      />
+      <YAxis
+        stroke={c.faint}
+        tick={{ fontSize: 11 }}
+        width={52}
+        domain={["dataMin - 3", "dataMax + 3"]}
+        tickFormatter={(v: number) => v.toFixed(0)}
+      />
+      <Tooltip
+        content={<ChartTooltip formats={{}} />}
+        cursor={{ stroke: c.faint, strokeDasharray: "3 3" }}
+      />
+      <Legend
+        verticalAlign="top"
+        align="left"
+        height={28}
+        iconType="plainline"
+        wrapperStyle={{ fontSize: 12, color: c.muted }}
+      />
+      {series.map((s, i) => (
+        <Line
+          key={s.name}
+          type="monotone"
+          dataKey={s.name}
+          name={s.name}
+          stroke={GLOBAL_PALETTE[i % GLOBAL_PALETTE.length]}
+          strokeWidth={1.8}
+          dot={false}
+          isAnimationActive={false}
+          connectNulls
+        />
+      ))}
+      {maKeys.map((key) => (
+        <Line
+          key={key}
+          type="monotone"
+          dataKey={key}
+          name={key}
+          stroke={withAlpha(c.ink, key.endsWith("150") ? 0.4 : 0.6)}
+          strokeWidth={1.3}
+          strokeDasharray={key.endsWith("150") ? "2 4" : "3 3"}
+          dot={false}
+          isAnimationActive={false}
+          connectNulls
+          legendType="none"
+        />
+      ))}
+    </LineChart>
+  );
+}
 
 function PeriodStat({ label, value }: { label: string; value: number | null }) {
   if (value === null || value === undefined) {
@@ -246,171 +445,4 @@ function RsIndicatorInline({
       ) : null}
     </div>
   );
-}
-
-function ExpandedGlobalCardModal({
-  card,
-  range,
-  onClose,
-  c,
-}: {
-  card: GlobalCard;
-  range: RangeKey;
-  onClose: () => void;
-  c: ReturnType<typeof useThemeColors>;
-}) {
-  const { data: seriesData } = useSWR<SeriesResponse>(
-    `/api/series?ticker=${encodeURIComponent(card.ticker)}&range=${range}`,
-    fetcher,
-    { keepPreviousData: true }
-  );
-
-  const chartData = useMemo(() => {
-    if (!seriesData || !seriesData.series || seriesData.series.length === 0) return [];
-    const series = seriesData.series[0];
-    const points = series.points.filter((p): p is { date: string; value: number } => p.value != null);
-    
-    // Compute MAs on the full series
-    const ma50 = computeMA(points, "value", 50);
-    const ma150 = computeMA(points, "value", 150);
-    
-    return points.map((p, idx) => ({
-      date: p.date,
-      value: p.value,
-      ma50: ma50[idx],
-      ma150: ma150[idx],
-    }));
-  }, [seriesData]);
-
-  const up = (card.change_pct ?? 0) >= 0;
-  const colour = up ? c.up : c.down;
-  const unitLabel = unitHint(card.unit);
-  const span = chartData.length;
-
-  return (
-    <ChartModal isOpen={true} onClose={onClose} title={`${card.name} (${card.ticker})`}>
-      <div>
-        {/* Header with current price and change */}
-        <div className="mb-4 flex items-baseline justify-between">
-          <div>
-            <p className="font-mono text-2xl font-semibold text-ink">
-              {num(card.last_close, card.unit === "bps" || card.unit === "index" ? 2 : 2)}
-              {unitLabel ? (
-                <span className="ml-1 text-sm font-medium text-faint">{unitLabel}</span>
-              ) : null}
-            </p>
-            <p className="text-sm text-muted">
-              Last close {card.last_date ? mediumDate(card.last_date) : "—"}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className={`text-lg font-semibold ${up ? "text-up" : "text-down"}`}>
-              {card.change_pct === null
-                ? "—"
-                : `${up ? "▲" : "▼"} ${Math.abs(card.change_pct).toFixed(2)}%`}
-            </p>
-            <p className="text-xs text-muted">Daily change</p>
-          </div>
-        </div>
-
-        {/* Period changes */}
-        <div className="mb-4 grid grid-cols-3 gap-3 rounded-lg border border-line/60 bg-surface p-3">
-          <div className="text-center">
-            <p className="text-xs text-muted">1M</p>
-            <p className={`font-mono text-sm font-semibold ${toneClass(card.change_1m)}`}>
-              {signed(card.change_1m, 2, "%")}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-muted">1Y</p>
-            <p className={`font-mono text-sm font-semibold ${toneClass(card.change_1y)}`}>
-              {signed(card.change_1y, 2, "%")}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-muted">5Y</p>
-            <p className={`font-mono text-sm font-semibold ${toneClass(card.change_5y)}`}>
-              {signed(card.change_5y, 2, "%")}
-            </p>
-          </div>
-        </div>
-
-        {/* Chart */}
-        {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={thin(chartData, 520)} margin={{ top: 10, right: 30, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke={c.line} strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="date"
-                stroke={c.faint}
-                tick={{ fontSize: 11 }}
-                tickFormatter={(v) => axisDate(v, span)}
-                minTickGap={40}
-              />
-              <YAxis
-                stroke={c.faint}
-                tick={{ fontSize: 11 }}
-                width={80}
-                domain={["auto", "auto"]}
-                tickFormatter={(v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-              />
-              <Tooltip
-                content={
-                  <ChartTooltip
-                    formats={{
-                      value: (v) => num(v, card.unit === "bps" || card.unit === "index" ? 2 : 2),
-                      ma50: (v) => num(v, 2),
-                      ma150: (v) => num(v, 2),
-                    }}
-                  />
-                }
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                name="Price"
-                stroke={colour}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-                connectNulls
-              />
-              <Line
-                type="monotone"
-                dataKey="ma50"
-                name="50 MA"
-                stroke={c["series-2"]}
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
-                dot={false}
-                isAnimationActive={false}
-                connectNulls
-              />
-              <Line
-                type="monotone"
-                dataKey="ma150"
-                name="150 MA"
-                stroke={c["series-3"]}
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
-                dot={false}
-                isAnimationActive={false}
-                connectNulls
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex h-[400px] items-center justify-center text-muted">
-            No data available for this market
-          </div>
-        )}
-      </div>
-    </ChartModal>
-  );
-}
-
-
-function toneClass(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "text-muted";
-  return value >= 0 ? "text-up" : "text-down";
 }
