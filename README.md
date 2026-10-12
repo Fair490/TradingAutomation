@@ -176,6 +176,27 @@ denominator moves with the data. Reference bands at 80 / 50 / 20.
 Both are computed with DuckDB window functions over ~1.2M rows in well under a
 second and stored, so the UI only ever reads precomputed tables.
 
+**Scanner** — screens every symbol in the universe file against the trend
+template below. All windows are *trading sessions*, not calendar days, and the
+benchmark is forward-filled onto each stock's own sessions:
+
+| Rule | Default | Toggle |
+| --- | --- | --- |
+| `close ≥ min_close_vs_high × max(close, lookback)` | 80% of the 252-session high | threshold |
+| `close ≥ SMA(50)` | — | `require_above_sma50` |
+| `SMA(50) ≥ SMA(150)` | — | `require_sma50_above_sma150` |
+| `SMA(200)[t] > SMA(200)[t-20 sessions]` | — | `require_rising_sma200` |
+| `RS[t] ≥ max(RS, lookback)` where `RS = close ÷ benchmark × 100` | 252 sessions | `require_rs_at_high` |
+
+A rule whose window extends past the available history simply does not pass.
+Symbols with no prices, fewer sessions than the enabled rules need, or a last
+bar more than 10 sessions old are *skipped and reported* (they are never
+silently treated as "no match"). A scan reads the whole universe in one query
+and computes every indicator once across a dates × tickers matrix, so it takes
+about a second for a 750-symbol universe and does not hold the database lock -
+`/api/meta`, `/api/breadth` and `/api/advance-decline` stay responsive while it
+runs.
+
 ---
 
 ## 6. API
@@ -191,6 +212,8 @@ second and stored, so the UI only ever reads precomputed tables.
 | GET | `/api/etfs?range=1Y` | ETF leaderboard: headline + per-period (1M/3M/6M/1Y) change & relative performance, plus 52w-high, 50-DMA, 150-DMA stats |
 | GET | `/api/etfs/compare?symbols=BANKBEES,ITBEES&range=1Y&benchmark=true` | Full lines for up to 8 ETFs plus the index |
 | GET | `/api/status` | Per-ticker status, row counts, failures |
+| POST | `/api/scanner/scan` | Run the trend-template scan. Body: `benchmark_ticker`, `min_close_vs_high`, the four `require_*` toggles, `lookback_days`. Returns `results`, `count`, `benchmark`, `criteria` **and `diagnostics`** (universe/evaluated/matched/skipped counts, per-criterion pass counts, skipped-symbol reasons, phase timings, warnings, explanation). `400` unknown benchmark/parameters, `409` scan already running, `503` missing market data or universe — a data failure is never returned as an empty result |
+| GET | `/api/scanner/scan` | Same scan via query parameters (handy for curl) |
 | POST | `/api/refresh` | Start a download (`{"full_rebuild": false}`) |
 | GET | `/api/refresh/status` | Progress, message and the final summary |
 | GET | `/api/health` | Liveness |
@@ -208,9 +231,9 @@ the top. Six pages:
 | --- | --- |
 | **Market Health** | Current panels (breadth, A/D, global, macro, commodities, status) |
 | **Sector Performance** | ETF leaderboard, compare chart, pop-out detail view |
-| **Scanner** | _Coming soon_ — screen the universe by RS, distance from MAs, breakouts |
+| **Scanner** | Trend-template screen (close vs high, 50/150/200DMA, benchmark RS) with live diagnostics |
 | **Portfolio** | _Coming soon_ — holdings, P&L, sector exposure |
-| **Terminal** | _Coming soon_ — watchlists and keyboard-driven research |
+| **Terminal** | Debug terminal: live backend logs |
 | **Trade Leader** | _Coming soon_ — relative-strength leaders across sectors |
 
 ### Market Health page
@@ -261,10 +284,11 @@ the top. Six pages:
 ## 8. Tests
 
 ```bash
-./.venv/bin/python -m pytest backend/tests -q     # 33 tests, no network
+./.venv/bin/python -m pytest backend/tests -q     # backend suites, no network
 cd frontend && npm run typecheck                  # strict TypeScript
 cd frontend && npm run smoke                      # headless render check (backend must be up)
 cd frontend && npm run smoke:hostile              # same, against deliberately nasty data
+cd frontend && npm run smoke:scanner              # scanner page: results, empty, errors, malformed
 ```
 
 `npm run smoke` renders the built app in jsdom with a ResizeObserver that
@@ -274,9 +298,20 @@ serves the shapes real Yahoo data produces and demo data never does: an
 overlay index that returned nothing, a failed series, an all-null series, a
 session with zero declines and missing percentage changes.
 
+`smoke:scanner` drives the Scanner tab through seven cases: a successful scan
+(matches, diagnostics, null metrics), a legitimate zero-match scan, an HTTP 503
+with a structured scanner error, invalid JSON, a missing results payload, a
+network failure, and repeated clicks (one request only).
+
 The Python suite covers the A/D counts and cumulative line, incremental
 updates, the 200DMA warm-up rule, normalisation, symbol mapping, the real
-universe file, yfinance response parsing, and every HTTP endpoint.
+universe file, yfinance response parsing, every HTTP endpoint, and the scanner:
+each filter's boundary, the moving-average / rolling-high / RS maths, benchmark
+date alignment, skipped-symbol reporting, every error path (missing benchmark,
+universe and database; invalid parameters; injected database and calculation
+failures), concurrent scans (409), that `/api/meta` stays responsive during a
+scan, that the universe is read in a single query, and a 400-symbol
+performance budget.
 
 ---
 

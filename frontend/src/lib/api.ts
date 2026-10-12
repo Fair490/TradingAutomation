@@ -216,6 +216,83 @@ export interface RefreshRequest {
   full_rebuild: boolean;
 }
 
+// --------------------------------------------------------------------------- //
+// Stock scanner (backend/scanner/routes.py)
+// --------------------------------------------------------------------------- //
+export interface ScanCriteria {
+  benchmark_ticker: string;
+  min_close_vs_high: number;
+  require_above_sma50: boolean;
+  require_sma50_above_sma150: boolean;
+  require_rising_sma200: boolean;
+  require_rs_at_high: boolean;
+  lookback_days: number;
+}
+
+export interface ScanResult {
+  symbol: string;
+  name: string;
+  ticker: string;
+  close: number;
+  close_vs_high_252: number | null;
+  sma50: number | null;
+  sma150: number | null;
+  sma200: number | null;
+  rs: number | null;
+  rising_rs: boolean;
+  passes_close_vs_high: boolean;
+  passes_above_sma50: boolean;
+  passes_sma50_above_sma150: boolean;
+  passes_rising_sma200: boolean;
+  passes_rs_at_high: boolean;
+}
+
+export interface SkippedSymbol {
+  ticker: string;
+  symbol: string;
+  reason: string;
+}
+
+export interface ScanDiagnostics {
+  universe_size: number;
+  symbols_with_data: number;
+  symbols_evaluated: number;
+  symbols_matched: number;
+  symbols_skipped: number;
+  skipped: Record<string, number>;
+  skipped_symbols: SkippedSymbol[];
+  criterion_pass_counts: Record<string, number>;
+  criterion_active: Record<string, boolean>;
+  benchmark: string;
+  benchmark_name: string | null;
+  benchmark_first_date: string | null;
+  benchmark_last_date: string | null;
+  benchmark_sessions: number;
+  evaluation_date: string | null;
+  required_sessions: number;
+  lookback_days: number;
+  price_column: string;
+  invalid_price_rows: number;
+  symbols_with_invalid_prices: number;
+  timings_ms: Record<string, number>;
+  warnings: string[];
+  explanation: string;
+}
+
+export interface ScanResponse {
+  results: ScanResult[];
+  count: number;
+  benchmark: string;
+  criteria: Record<string, unknown>;
+  diagnostics: ScanDiagnostics | null;
+}
+
+/** Structured error body the API returns for scanner failures. */
+export interface ApiErrorDetail {
+  code: string;
+  message: string;
+}
+
 export async function fetcher<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
