@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import numpy as np
 import pandas as pd
 
 from backend import config
@@ -185,32 +186,26 @@ def price_stats_vs_ma(con, ticker: str) -> dict:
     }
 
 
-def compute_sma(values: list[float | None] | pd.Series, window: int) -> list[float | None]:
+def compute_sma(
+    values: list[float | None] | pd.Series | np.ndarray, window: int
+) -> list[float | None]:
     """
-    Compute Simple Moving Average.
-    
-    Args:
-        values: List or Series of numeric values
-        window: Window size for SMA
-    
-    Returns:
-        List of SMA values (None for insufficient data)
+    Compute the Simple Moving Average over ``window`` observations.
+
+    Semantics are unchanged from the original implementation: an output entry
+    is ``None`` unless the trailing window contains exactly ``window`` usable
+    (non-None, non-NaN) observations, and otherwise it is their mean.
+
+    Implementation note: the original walked every window in Python, i.e.
+    O(n * window) interpreter work per call. Called three times per symbol
+    across a ~760-symbol universe that dominated the whole scan (measured at
+    ~232s of a 259s scan). pandas' rolling mean is the same arithmetic in C.
     """
-    import numpy as np
-    
-    if isinstance(values, pd.Series):
-        values = values.tolist()
-    
-    result = []
-    for i in range(len(values)):
-        if i < window - 1:
-            result.append(None)
-        else:
-            window_values = values[i - window + 1:i + 1]
-            valid_values = [v for v in window_values if v is not None and not np.isnan(v)]
-            if len(valid_values) == window:
-                result.append(sum(valid_values) / window)
-            else:
-                result.append(None)
-    
-    return result
+    if window <= 0:
+        raise ValueError("window must be positive")
+    series = values if isinstance(values, pd.Series) else pd.Series(values, dtype="float64")
+    series = series.astype("float64")
+    if series.empty:
+        return []
+    rolling = series.rolling(window=window, min_periods=window).mean()
+    return [None if pd.isna(value) else float(value) for value in rolling]

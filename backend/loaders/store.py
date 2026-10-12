@@ -12,7 +12,7 @@ import datetime as dt
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Sequence
 
 import duckdb
 import pandas as pd
@@ -262,6 +262,54 @@ def load_series(
         params.append(start)
     sql += " ORDER BY date"
     return con.execute(sql, params).df()
+
+
+def count_prices(con: duckdb.DuckDBPyConnection) -> int:
+    """Total number of stored price rows (cheap readiness check)."""
+    return int(con.execute("SELECT count(*) FROM prices").fetchone()[0])
+
+
+def known_ticker_rows(con: duckdb.DuckDBPyConnection) -> dict[str, str]:
+    """ticker -> kind for everything in the catalogue (no price reads)."""
+    return {
+        t: (kind or "")
+        for t, kind in con.execute("SELECT ticker, kind FROM tickers").fetchall()
+    }
+
+
+def load_price_panel(
+    con: duckdb.DuckDBPyConnection,
+    tickers: Sequence[str],
+    column: str = "close",
+    start: dt.date | None = None,
+) -> pd.DataFrame:
+    """
+    One query for many tickers: long frame with ticker / date / value.
+
+    The scanner needs the same 5-year history for the whole universe; fetching
+    it ticker-by-ticker is an N+1 pattern that costs one table scan per symbol.
+    This performs a single pass joined against the requested ticker list.
+    """
+    if column not in ("close", "adj_close"):
+        raise ValueError(f"Unsupported price column: {column!r}")
+    if not tickers:
+        return pd.DataFrame(columns=["ticker", "date", "value"])
+
+    wanted = pd.DataFrame({"ticker": list(dict.fromkeys(tickers))})
+    con.register("wanted_tickers", wanted)
+    try:
+        sql = (
+            f"SELECT p.ticker, p.date, p.{column} AS value "
+            "FROM prices p JOIN wanted_tickers w ON w.ticker = p.ticker"
+        )
+        params: list = []
+        if start is not None:
+            sql += " WHERE p.date >= ?"
+            params.append(start)
+        sql += " ORDER BY p.ticker, p.date"
+        return con.execute(sql, params).df()
+    finally:
+        con.unregister("wanted_tickers")
 
 
 def wipe_all(con: duckdb.DuckDBPyConnection) -> None:

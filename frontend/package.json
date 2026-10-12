@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "smoke": "vite build && node scripts/smoke.mjs",
     "smoke:hostile": "vite build && node scripts/smoke-hostile.mjs",
-    "stub-api": "node scripts/stub-api.mjs"
+    "stub-api": "node scripts/stub-api.mjs",
+    "smoke:scanner": "vite build && node scripts/scanner-smoke.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

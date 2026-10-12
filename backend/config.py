@@ -138,6 +138,32 @@ ETF_RANK_PERIODS: tuple[str, ...] = ("1M", "3M", "6M", "1Y")
 MA_WINDOWS: tuple[int, ...] = (50, 150)
 
 # --------------------------------------------------------------------------- #
+# Stock scanner
+# --------------------------------------------------------------------------- #
+# Every window below is measured in TRADING SESSIONS (rows in `prices`), never
+# in calendar days - the bars simply do not exist on weekends/holidays, so a
+# rolling window of N rows is exactly the intended N-session lookback.
+SCANNER_SMA_FAST = 50  # "close >= 50DMA"
+SCANNER_SMA_MID = 150  # "50DMA >= 150DMA"
+SCANNER_SMA_SLOW = 200  # "200DMA rising"
+SCANNER_SMA200_RISING_OFFSET = 20  # compare 200DMA today with 20 sessions ago
+SCANNER_DEFAULT_LOOKBACK = 252  # distance-to-high / RS-high window, sessions
+SCANNER_MIN_LOOKBACK = 30  # request validation bounds
+SCANNER_MAX_LOOKBACK = 1000
+# Price field the scan reads. Yahoo's raw Close is already split-adjusted
+# (Adj Close adds dividend adjustment); every chart, the breadth panel and the
+# A/D panel use Close, so the scanner uses the same field by default and the
+# choice is explicit rather than accidental. Set to "adj_close" to include
+# dividend adjustment (results will differ slightly).
+SCANNER_PRICE_COLUMN = "close"
+# A symbol whose latest stored bar is more than this many sessions behind the
+# freshest bar in the database is treated as stale and skipped: a suspended or
+# delisted line must never be reported as a live setup.
+SCANNER_MAX_STALENESS_SESSIONS = 10
+# How many skipped symbols are echoed back in the diagnostics payload.
+SCANNER_SKIPPED_SYMBOL_LIMIT = 100
+
+# --------------------------------------------------------------------------- #
 # RS (Relative Strength) benchmarks
 # --------------------------------------------------------------------------- #
 # The RS indicator compares any series' close to one of these benchmarks. The
