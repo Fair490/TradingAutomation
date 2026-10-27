@@ -1,110 +1,108 @@
 """
-API routes for the stock scanner.
+Scanner API Routes
 """
 
-from __future__ import annotations
+from fastapi import APIRouter, HTTPException
+from typing import Optional
+import logging
 
-from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from backend.scanner import (
+    ScannerCriteria,
+    ScannerResponse,
+    run_scan_api,
+    get_cached_results
+)
 
-from backend.scanner import scan_stocks
+logger = logging.getLogger(__name__)
 
-
-router = APIRouter(prefix="/api/scanner", tags=["scanner"])
-
-
-class ScanRequest(BaseModel):
-    """Scanner request parameters."""
-    benchmark_ticker: str = "^CRSLDX"
-    min_close_vs_high: float = 0.80
-    require_above_sma50: bool = True
-    require_sma50_above_sma150: bool = True
-    require_rising_sma200: bool = True
-    require_rs_at_high: bool = True
-    lookback_days: int = 252
+scanner_router = APIRouter(prefix="/api/scanner", tags=["scanner"])
 
 
-class ScanResult(BaseModel):
-    """Single scan result."""
-    symbol: str
-    name: str
-    ticker: str
-    close: float
-    close_vs_high_252: float
-    sma50: float | None
-    sma150: float | None
-    sma200: float | None
-    rs: float | None
-    rising_rs: bool
-    passes_close_vs_high: bool
-    passes_above_sma50: bool
-    passes_sma50_above_sma150: bool
-    passes_rising_sma200: bool
-    passes_rs_at_high: bool
-
-
-class ScanResponse(BaseModel):
-    """Scanner response."""
-    results: list[ScanResult]
-    count: int
-    benchmark: str
-    criteria: dict
-
-
-@router.post("/scan", response_model=ScanResponse)
-def scan(request: ScanRequest) -> ScanResponse:
+@scanner_router.post("/scan", response_model=ScannerResponse)
+async def scan_stocks(criteria: Optional[ScannerCriteria] = None):
     """
-    Scan stocks against technical criteria.
+    Run stock scanner with given criteria.
     
-    Returns stocks that pass all enabled hard rules.
+    This will:
+    1. Load universe from Excel file
+    2. Download price data from Yahoo Finance
+    3. Apply technical criteria
+    4. Calculate RS scores and percentiles
+    5. Save results to files
+    
+    Args:
+        criteria: Scanner criteria (optional)
+        
+    Returns:
+        ScannerResponse with results
     """
-    df = scan_stocks(
-        benchmark_ticker=request.benchmark_ticker,
-        min_close_vs_high=request.min_close_vs_high,
-        require_above_sma50=request.require_above_sma50,
-        require_sma50_above_sma150=request.require_sma50_above_sma150,
-        require_rising_sma200=request.require_rising_sma200,
-        require_rs_at_high=request.require_rs_at_high,
-        lookback_days=request.lookback_days,
-    )
-    
-    results = df.to_dict("records") if not df.empty else []
-    
-    return ScanResponse(
-        results=results,
-        count=len(results),
-        benchmark=request.benchmark_ticker,
-        criteria={
-            "min_close_vs_high": request.min_close_vs_high,
-            "require_above_sma50": request.require_above_sma50,
-            "require_sma50_above_sma150": request.require_sma50_above_sma150,
-            "require_rising_sma200": request.require_rising_sma200,
-            "require_rs_at_high": request.require_rs_at_high,
-            "lookback_days": request.lookback_days,
-        },
-    )
+    try:
+        logger.info("Starting scanner via API")
+        response = run_scan_api(criteria)
+        logger.info(f"Scanner completed: {response.count} stocks found")
+        return response
+    except Exception as e:
+        logger.error(f"Scanner API error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Scanner failed: {str(e)}")
 
 
-@router.get("/scan")
-def scan_get(
-    benchmark_ticker: str = Query("^CRSLDX"),
-    min_close_vs_high: float = Query(0.80),
-    require_above_sma50: bool = Query(True),
-    require_sma50_above_sma150: bool = Query(True),
-    require_rising_sma200: bool = Query(True),
-    require_rs_at_high: bool = Query(True),
-    lookback_days: int = Query(252),
-) -> ScanResponse:
+@scanner_router.get("/scan", response_model=ScannerResponse)
+async def get_scan_results():
     """
-    Scan stocks against technical criteria (GET method).
+    Get cached scanner results without running a new scan.
+    
+    Returns the latest results from the most recent scan.
+    
+    Returns:
+        ScannerResponse with cached results
     """
-    request = ScanRequest(
-        benchmark_ticker=benchmark_ticker,
-        min_close_vs_high=min_close_vs_high,
-        require_above_sma50=require_above_sma50,
-        require_sma50_above_sma150=require_sma50_above_sma150,
-        require_rising_sma200=require_rising_sma200,
-        require_rs_at_high=require_rs_at_high,
-        lookback_days=lookback_days,
-    )
-    return scan(request)
+    try:
+        logger.info("Fetching cached scanner results")
+        response = get_cached_results()
+        logger.info(f"Loaded {response.count} cached results")
+        return response
+    except Exception as e:
+        logger.error(f"Failed to load cached results: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to load results: {str(e)}")
+
+
+@scanner_router.get("/status")
+async def scanner_status():
+    """
+    Get scanner status and configuration.
+    
+    Returns:
+        Dictionary with scanner status info
+    """
+    from backend.scanner import SCANNER_AVAILABLE
+    from pathlib import Path
+    
+    # Check if universe file exists
+    universe_file = Path("backend/data/universe.xlsx")
+    universe_exists = universe_file.exists()
+    
+    # Check if output directory exists
+    output_dir = Path("backend/data/scanner_output")
+    output_exists = output_dir.exists()
+    
+    # Count results
+    result_count = 0
+    if output_exists:
+        excel_files = list(output_dir.glob("scan_results_*.xlsx"))
+        if excel_files:
+            import pandas as pd
+            latest = max(excel_files)
+            try:
+                df = pd.read_excel(latest)
+                result_count = len(df)
+            except:
+                pass
+    
+    return {
+        "scanner_available": SCANNER_AVAILABLE,
+        "universe_file_exists": universe_exists,
+        "universe_file_path": str(universe_file),
+        "output_directory_exists": output_exists,
+        "output_directory_path": str(output_dir),
+        "cached_result_count": result_count
+    }
