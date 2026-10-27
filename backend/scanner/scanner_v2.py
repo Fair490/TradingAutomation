@@ -62,7 +62,8 @@ logger = logging.getLogger(__name__)
 
 def load_universe() -> List[str]:
     """
-    Load universe from Excel file and convert to yfinance format.
+    Load universe from Excel or CSV file and convert to yfinance format.
+    Supports both .xlsx and .csv formats with automatic fallback.
     
     Returns:
         List of tickers in yfinance format (e.g., "RELIANCE.NS")
@@ -70,10 +71,30 @@ def load_universe() -> List[str]:
     logger.info(f"Loading universe from {UNIVERSE_FILE}")
     
     if not os.path.exists(UNIVERSE_FILE):
-        raise FileNotFoundError(f"Universe file not found: {UNIVERSE_FILE}")
+        # Try CSV fallback if Excel file not found
+        csv_fallback = UNIVERSE_FILE.replace('.xlsx', '.csv')
+        if os.path.exists(csv_fallback):
+            logger.info(f"Excel file not found, falling back to CSV: {csv_fallback}")
+            universe_file = csv_fallback
+        else:
+            raise FileNotFoundError(f"Universe file not found: {UNIVERSE_FILE} (also tried {csv_fallback})")
+    else:
+        universe_file = UNIVERSE_FILE
     
-    # Read Excel file
-    df = pd.read_excel(UNIVERSE_FILE)
+    # Read file based on extension
+    try:
+        if universe_file.endswith('.csv'):
+            df = pd.read_csv(universe_file)
+        elif universe_file.endswith('.xlsx') or universe_file.endswith('.xls'):
+            df = pd.read_excel(universe_file)
+        else:
+            # Try CSV first, then Excel
+            try:
+                df = pd.read_csv(universe_file)
+            except:
+                df = pd.read_excel(universe_file)
+    except Exception as e:
+        raise ValueError(f"Failed to read universe file {universe_file}: {e}. Make sure openpyxl is installed for Excel files: pip install openpyxl")
     
     # Check if column exists
     if UNIVERSE_COLUMN not in df.columns:
