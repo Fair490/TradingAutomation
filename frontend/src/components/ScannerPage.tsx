@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Play, Download, AlertCircle, CheckCircle, Clock } from "lucide-react";
-import { Card } from "./ui/card";
+import { Card } from "./ui";
 
 interface ScannerCriteria {
   ema_fast: number;
