@@ -28,7 +28,7 @@ from backend.api.responses import SafeJSONResponse
 from backend.api.routes import router
 from backend.debug.logger import setup_debug_logging
 from backend.debug.routes import router as debug_router
-from backend.scanner.routes import router as scanner_router
+from backend.scanner.routes import scanner_router
 from backend.loaders import store
 
 # Set up debug logging (includes console and debug terminal)
