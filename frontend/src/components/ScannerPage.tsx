@@ -20,11 +20,14 @@ interface ScannerResult {
   ema50: number;
   ema150: number;
   high_52w: number;
-  pct_below_high: number;
-  pct_vs_ema50: number;
   rs_ratio: number;
   rs_score_pct: number;
   rs_percentile: number;
+  proximity_pct: number;
+  proximity_percentile: number;
+  composite_score: number;
+  extension_pct: number;
+  extended: boolean;
 }
 
 interface ScanResponse {
@@ -86,11 +89,14 @@ export function ScannerPage() {
       "EMA50",
       "EMA150",
       "52W High",
-      "% Below 52W High",
-      "Close vs EMA50 (%)",
+      "Proximity %",
+      "Proximity Percentile",
       "RS Ratio",
       "RS Score (%)",
       "RS Percentile",
+      "Composite Score",
+      "Extension %",
+      "Extended",
     ];
 
     const rows = results.results.map((r) => [
@@ -100,11 +106,14 @@ export function ScannerPage() {
       r.ema50.toFixed(2),
       r.ema150.toFixed(2),
       r.high_52w.toFixed(2),
-      r.pct_below_high.toFixed(2),
-      r.pct_vs_ema50.toFixed(2),
+      r.proximity_pct.toFixed(2),
+      r.proximity_percentile.toString(),
       r.rs_ratio.toFixed(4),
       r.rs_score_pct.toFixed(2),
       r.rs_percentile.toString(),
+      r.composite_score.toFixed(2),
+      r.extension_pct.toFixed(2),
+      r.extended ? "Yes" : "No",
     ]);
 
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
@@ -356,12 +365,14 @@ export function ScannerPage() {
                       <th className="px-3 py-2 text-left font-medium text-ink">Symbol</th>
                       <th className="px-3 py-2 text-right font-medium text-ink">Close</th>
                       <th className="px-3 py-2 text-right font-medium text-ink">EMA50</th>
-                      <th className="px-3 py-2 text-right font-medium text-ink">EMA150</th>
                       <th className="px-3 py-2 text-right font-medium text-ink">52W High</th>
-                      <th className="px-3 py-2 text-right font-medium text-ink">% Below 52W</th>
-                      <th className="px-3 py-2 text-right font-medium text-ink">% vs EMA50</th>
+                      <th className="px-3 py-2 text-right font-medium text-ink">Proximity %</th>
+                      <th className="px-3 py-2 text-right font-medium text-ink">Prox %ile</th>
                       <th className="px-3 py-2 text-right font-medium text-ink">RS Score</th>
                       <th className="px-3 py-2 text-right font-medium text-ink">RS %ile</th>
+                      <th className="px-3 py-2 text-right font-medium text-ink">Composite</th>
+                      <th className="px-3 py-2 text-right font-medium text-ink">Extension %</th>
+                      <th className="px-3 py-2 text-center font-medium text-ink">Extended</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -383,22 +394,36 @@ export function ScannerPage() {
                           ₹{stock.ema50.toFixed(2)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono">
-                          ₹{stock.ema150.toFixed(2)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono">
                           ₹{stock.high_52w.toFixed(2)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono">
-                          {stock.pct_below_high.toFixed(2)}%
+                          {stock.proximity_pct.toFixed(1)}%
                         </td>
                         <td className="px-3 py-2 text-right font-mono">
-                          {stock.pct_vs_ema50.toFixed(2)}%
+                          {stock.proximity_percentile}
                         </td>
                         <td className="px-3 py-2 text-right font-mono">
                           {stock.rs_score_pct.toFixed(2)}%
                         </td>
                         <td className="px-3 py-2 text-right font-mono">
                           {stock.rs_percentile}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-semibold">
+                          {stock.composite_score.toFixed(1)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          {stock.extension_pct.toFixed(1)}%
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {stock.extended ? (
+                            <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                              Yes
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                              No
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}

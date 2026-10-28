@@ -41,11 +41,14 @@ class ScannerResult(BaseModel):
     ema50: float
     ema150: float
     high_52w: float
-    pct_below_high: float
-    pct_vs_ema50: float
     rs_ratio: float
     rs_score_pct: float
     rs_percentile: int
+    proximity_pct: float = 0.0
+    proximity_percentile: int = 0
+    composite_score: float = 0.0
+    extension_pct: float = 0.0
+    extended: bool = False
 
 
 class ScannerResponse(BaseModel):
@@ -128,11 +131,14 @@ def run_scan_api(criteria: Optional[ScannerCriteria] = None) -> ScannerResponse:
                     ema50=float(row['EMA50']),
                     ema150=float(row['EMA150']),
                     high_52w=float(row['52W_High']),
-                    pct_below_high=float(row['Pct_Below_52W_High']),
-                    pct_vs_ema50=float(row['Close_vs_EMA50_Pct']),
                     rs_ratio=float(row['RS_Ratio']),
                     rs_score_pct=float(row['RS_Score_Pct']),
-                    rs_percentile=int(row['RS_Percentile'])
+                    rs_percentile=int(row['RS_Percentile']),
+                    proximity_pct=float(row.get('Proximity_Pct', 0.0)),
+                    proximity_percentile=int(row.get('Proximity_Percentile', 0)),
+                    composite_score=float(row.get('Composite_Score', 0.0)),
+                    extension_pct=float(row.get('Extension_Pct', 0.0)),
+                    extended=bool(row.get('Extended', False))
                 )
             )
         
@@ -186,11 +192,14 @@ def get_cached_results() -> ScannerResponse:
                 ema50=float(row['EMA50']),
                 ema150=float(row['EMA150']),
                 high_52w=float(row['52W_High']),
-                pct_below_high=float(row['Pct_Below_52W_High']),
-                pct_vs_ema50=float(row['Close_vs_EMA50_Pct']),
                 rs_ratio=float(row['RS_Ratio']),
                 rs_score_pct=float(row['RS_Score_Pct']),
-                rs_percentile=int(row['RS_Percentile'])
+                rs_percentile=int(row['RS_Percentile']),
+                proximity_pct=float(row.get('Proximity_Pct', 0.0)),
+                proximity_percentile=int(row.get('Proximity_Percentile', 0)),
+                composite_score=float(row.get('Composite_Score', 0.0)),
+                extension_pct=float(row.get('Extension_Pct', 0.0)),
+                extended=bool(row.get('Extended', False))
             )
         )
     

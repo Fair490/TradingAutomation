@@ -42,6 +42,12 @@ MAX_RETRIES = 3  # Retries per stock
 MARKET_CLOSE_HOUR = 15
 MARKET_CLOSE_MINUTE = 30
 
+# Ranking configuration
+RANK_MODE = "COMPOSITE"  # "RS" for RS-only ranking, "COMPOSITE" for composite ranking
+RS_WEIGHT = 0.70  # Weight for RS Percentile in composite score
+PROX_WEIGHT = 0.30  # Weight for Proximity Percentile in composite score
+EXTENSION_THRESHOLD = 15.0  # Extension % threshold for "Extended" flag
+
 # ============================================================================
 # LOGGING SETUP
 # ============================================================================
@@ -336,19 +342,19 @@ def scan_stocks(
     benchmark_close: pd.Series
 ) -> Tuple[pd.DataFrame, pd.Series]:
     """
-    Scan stocks against technical criteria.
+    Scan stocks against technical criteria with composite ranking.
     
     Args:
         stock_data: Dictionary of stock DataFrames
         benchmark_close: Benchmark close prices
         
     Returns:
-        Tuple of (passing_stocks_df, rs_percentile_series)
+        Tuple of (passing_stocks_df, all_universe_metrics_df)
     """
     logger.info("Scanning stocks against criteria")
     
     results = []
-    all_rs_scores = {}  # For percentile calculation
+    all_universe_metrics = {}  # Store metrics for ALL stocks for percentile calculation
     
     for ticker, df in stock_data.items():
         try:
@@ -377,9 +383,21 @@ def scan_stocks(
             if rs_score is None:
                 continue
             
-            # Store RS score for percentile calculation
+            # Calculate metrics for ALL stocks (for percentile calculation)
             symbol = ticker.replace('.NS', '')
-            all_rs_scores[symbol] = rs_score
+            proximity_pct = (close / high_52w) * 100
+            extension_pct = ((close / ema50_latest) - 1) * 100
+            
+            all_universe_metrics[symbol] = {
+                'rs_score': rs_score,
+                'proximity_pct': proximity_pct,
+                'extension_pct': extension_pct,
+                'close': close,
+                'ema50': ema50_latest,
+                'ema150': ema150_latest,
+                'high_52w': high_52w,
+                'rs_ratio': rs_ratio
+            }
             
             # Check conditions
             cond_1 = close >= ema50_latest  # Close >= EMA50
@@ -387,20 +405,17 @@ def scan_stocks(
             cond_3 = ema50_latest >= ema150_latest  # EMA50 >= EMA150
             
             if cond_1 and cond_2 and cond_3:
-                # Calculate additional metrics
-                pct_below_high = ((close / high_52w) - 1) * 100
-                pct_vs_ema50 = ((close / ema50_latest) - 1) * 100
-                
+                # Store passing stock data
                 results.append({
                     'Symbol': symbol,
                     'Close': close,
                     'EMA50': ema50_latest,
                     'EMA150': ema150_latest,
                     '52W_High': high_52w,
-                    'Pct_Below_52W_High': pct_below_high,
-                    'Close_vs_EMA50_Pct': pct_vs_ema50,
                     'RS_Ratio': rs_ratio,
-                    'RS_Score_Pct': rs_score
+                    'RS_Score_Pct': rs_score,
+                    'Proximity_Pct': proximity_pct,
+                    'Extension_Pct': extension_pct
                 })
         
         except Exception as e:
@@ -410,22 +425,42 @@ def scan_stocks(
     # Convert to DataFrame
     if not results:
         logger.warning("No stocks passed the criteria")
-        return pd.DataFrame(), pd.Series(all_rs_scores)
+        return pd.DataFrame(), pd.DataFrame(all_universe_metrics).T
     
     results_df = pd.DataFrame(results)
+    all_universe_df = pd.DataFrame(all_universe_metrics).T
     
-    # Calculate RS percentile for all stocks
-    rs_percentile_series = pd.Series(all_rs_scores).rank(pct=True) * 100
+    # Calculate percentiles across the FULL UNIVERSE
+    rs_percentile_series = all_universe_df['rs_score'].rank(pct=True) * 100
+    proximity_percentile_series = all_universe_df['proximity_pct'].rank(pct=True) * 100
     
-    # Add RS percentile to passing stocks
+    # Add percentiles to passing stocks
     results_df['RS_Percentile'] = results_df['Symbol'].map(rs_percentile_series).round(0).astype(int)
+    results_df['Proximity_Percentile'] = results_df['Symbol'].map(proximity_percentile_series).round(0).astype(int)
     
-    # Sort by RS score and add rank
-    results_df = results_df.sort_values('RS_Score_Pct', ascending=False).reset_index(drop=True)
+    # Calculate Composite Score or use RS-only based on RANK_MODE
+    if RANK_MODE == "COMPOSITE":
+        results_df['Composite_Score'] = (
+            RS_WEIGHT * results_df['RS_Percentile'] + 
+            PROX_WEIGHT * results_df['Proximity_Percentile']
+        )
+        # Sort by Composite Score
+        results_df = results_df.sort_values('Composite_Score', ascending=False).reset_index(drop=True)
+        logger.info(f"Ranking mode: COMPOSITE (RS_WEIGHT={RS_WEIGHT}, PROX_WEIGHT={PROX_WEIGHT})")
+    else:  # RANK_MODE == "RS"
+        results_df['Composite_Score'] = results_df['RS_Percentile']  # For consistency
+        # Sort by RS Score
+        results_df = results_df.sort_values('RS_Score_Pct', ascending=False).reset_index(drop=True)
+        logger.info(f"Ranking mode: RS-only")
+    
+    # Add Extended flag
+    results_df['Extended'] = results_df['Extension_Pct'] > EXTENSION_THRESHOLD
+    
+    # Add Rank column
     results_df.insert(0, 'Rank', range(1, len(results_df) + 1))
     
     logger.info(f"Scan complete: {len(results_df)} stocks passed criteria")
-    return results_df, rs_percentile_series
+    return results_df, all_universe_df
 
 
 def save_results(df: pd.DataFrame, output_dir: str = OUTPUT_DIR) -> Tuple[str, str]:
@@ -489,24 +524,29 @@ def print_summary(
     if not results_df.empty:
         print(f"\nTOP {min(top_n, len(results_df))} STOCKS:")
         print("-"*80)
+        print(f"Ranking Mode: {RANK_MODE}")
+        if RANK_MODE == "COMPOSITE":
+            print(f"Composite Score = {RS_WEIGHT}*RS_Percentile + {PROX_WEIGHT}*Proximity_Percentile")
+        print("-"*80)
         
         # Format for display
-        display_cols = ['Rank', 'Symbol', 'Close', 'EMA50', 'EMA150', '52W_High', 
-                       'Pct_Below_52W_High', 'Close_vs_EMA50_Pct', 'RS_Ratio', 
-                       'RS_Score_Pct', 'RS_Percentile']
+        display_cols = ['Rank', 'Symbol', 'Close', 'EMA50', '52W_High', 
+                       'Proximity_Pct', 'Proximity_Percentile', 'RS_Score_Pct', 
+                       'RS_Percentile', 'Composite_Score', 'Extension_Pct', 'Extended']
         
         display_df = results_df[display_cols].head(top_n).copy()
         
         # Format numbers
         display_df['Close'] = display_df['Close'].map(lambda x: f"₹{x:.2f}")
         display_df['EMA50'] = display_df['EMA50'].map(lambda x: f"₹{x:.2f}")
-        display_df['EMA150'] = display_df['EMA150'].map(lambda x: f"₹{x:.2f}")
         display_df['52W_High'] = display_df['52W_High'].map(lambda x: f"₹{x:.2f}")
-        display_df['Pct_Below_52W_High'] = display_df['Pct_Below_52W_High'].map(lambda x: f"{x:.2f}%")
-        display_df['Close_vs_EMA50_Pct'] = display_df['Close_vs_EMA50_Pct'].map(lambda x: f"{x:.2f}%")
-        display_df['RS_Ratio'] = display_df['RS_Ratio'].map(lambda x: f"{x:.4f}")
+        display_df['Proximity_Pct'] = display_df['Proximity_Pct'].map(lambda x: f"{x:.1f}%")
+        display_df['Proximity_Percentile'] = display_df['Proximity_Percentile'].map(lambda x: f"{x}")
         display_df['RS_Score_Pct'] = display_df['RS_Score_Pct'].map(lambda x: f"{x:.2f}%")
         display_df['RS_Percentile'] = display_df['RS_Percentile'].map(lambda x: f"{x}")
+        display_df['Composite_Score'] = display_df['Composite_Score'].map(lambda x: f"{x:.1f}")
+        display_df['Extension_Pct'] = display_df['Extension_Pct'].map(lambda x: f"{x:.1f}%")
+        display_df['Extended'] = display_df['Extended'].map(lambda x: "Yes" if x else "No")
         
         print(display_df.to_string(index=False))
     
@@ -541,7 +581,7 @@ def run_scanner() -> pd.DataFrame:
         stock_data, failed_tickers, skipped_tickers = download_stock_data(tickers)
         
         # Scan stocks
-        results_df, rs_percentile_series = scan_stocks(stock_data, benchmark_close)
+        results_df, all_universe_df = scan_stocks(stock_data, benchmark_close)
         
         # Save results
         if not results_df.empty:
